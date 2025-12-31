@@ -1,11 +1,15 @@
 const WebSocket = require("ws");
-const { addToQueue } = require("../games/matchmaking");
-const { activeGames } = require("../games/gameManager");
-const { makeMove, checkWin, checkDraw } = require("../games/logic");
+const { addToQueue } = require("../game/matchmaking");
+const { activeGames } = require("../game/gameManager");
+const { makeMove, checkWin, checkDraw } = require("../game/logic");
 
 // Track connected users
 // username -> websocket
 const clients = new Map();
+
+// Track disconnect timers for reconnection
+// username -> timeoutId
+const disconnectTimers = new Map();
 
 function setupWebSocket(server) {
   const wss = new WebSocket.Server({ server });
@@ -22,31 +26,37 @@ function setupWebSocket(server) {
         return;
       }
 
-      // JOIN
+      /* -------------------- JOIN -------------------- */
       if (data.type === "JOIN") {
         username = data.username;
         clients.set(username, ws);
 
+        // If user reconnects within 30s, cancel forfeit timer
+        if (disconnectTimers.has(username)) {
+          clearTimeout(disconnectTimers.get(username));
+          disconnectTimers.delete(username);
+        }
+
         ws.send(JSON.stringify({
           type: "JOINED",
-          message: "Connected"
+          message: "Connected successfully"
         }));
       }
 
-      // START MATCH
+      /* -------------------- START MATCH -------------------- */
       if (data.type === "START_MATCH") {
         addToQueue(username, (game) => {
           if (!game) {
             ws.send(JSON.stringify({
               type: "WAITING",
-              message: "No opponent yet"
+              message: "Waiting for opponent"
             }));
             return;
           }
 
           gameId = game.gameId;
 
-          const startPayload = JSON.stringify({
+          const payload = JSON.stringify({
             type: "GAME_START",
             gameId: game.gameId,
             player1: game.player1,
@@ -55,17 +65,17 @@ function setupWebSocket(server) {
             board: game.board
           });
 
-          clients.get(game.player1)?.send(startPayload);
-          clients.get(game.player2)?.send(startPayload);
+          clients.get(game.player1)?.send(payload);
+          clients.get(game.player2)?.send(payload);
         });
       }
 
-      // MOVE
+      /* -------------------- MOVE -------------------- */
       if (data.type === "MOVE") {
         const game = activeGames.get(gameId);
         if (!game) return;
 
-        // Turn validation stays outside logic.js
+        // Turn validation (server decides)
         if (game.currentTurn !== username) {
           ws.send(JSON.stringify({
             type: "ERROR",
@@ -74,7 +84,7 @@ function setupWebSocket(server) {
           return;
         }
 
-        // Apply move (pure board logic)
+        // Apply move using pure logic
         const result = makeMove(game.board, data.column, username);
 
         if (result.error) {
@@ -85,11 +95,12 @@ function setupWebSocket(server) {
           return;
         }
 
-        // Check win
+        // Win check
         if (checkWin(game.board, username)) {
           const endPayload = JSON.stringify({
             type: "GAME_END",
             winner: username,
+            result: "WIN",
             board: game.board
           });
 
@@ -100,7 +111,7 @@ function setupWebSocket(server) {
           return;
         }
 
-        // Check draw
+        // Draw check
         if (checkDraw(game.board)) {
           const drawPayload = JSON.stringify({
             type: "GAME_END",
@@ -115,11 +126,11 @@ function setupWebSocket(server) {
           return;
         }
 
-        // Switch turn (server responsibility)
+        // Switch turn
         game.currentTurn =
           username === game.player1 ? game.player2 : game.player1;
 
-        // Send updated board
+        // Broadcast updated state
         const updatePayload = JSON.stringify({
           type: "GAME_UPDATE",
           board: game.board,
@@ -131,10 +142,31 @@ function setupWebSocket(server) {
       }
     });
 
+    /* -------------------- DISCONNECT -------------------- */
     ws.on("close", () => {
-      if (username) {
-        clients.delete(username);
-      }
+      if (!username || !gameId) return;
+
+      // Start 30-second grace period
+      const timer = setTimeout(() => {
+        const game = activeGames.get(gameId);
+        if (!game) return;
+
+        const winner =
+          username === game.player1 ? game.player2 : game.player1;
+
+        const payload = JSON.stringify({
+          type: "GAME_END",
+          result: "FORFEIT",
+          winner
+        });
+
+        clients.get(winner)?.send(payload);
+
+        activeGames.delete(gameId);
+        disconnectTimers.delete(username);
+      }, 30000);
+
+      disconnectTimers.set(username, timer);
     });
   });
 }
