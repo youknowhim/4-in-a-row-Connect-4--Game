@@ -1,4 +1,4 @@
-/**
+/*
  * Try to place a disc in the given column.
  * This function ONLY updates board state.
  */
@@ -19,7 +19,7 @@ function makeMove(board, column, player) {
   return { error: "Column full" };
 }
 
-/**
+/*
  * Check if the given player has won the game.
  */
 function checkWin(board, player) {
@@ -28,10 +28,10 @@ function checkWin(board, player) {
 
   // 4 directions: horizontal, vertical, 2 diagonals
   const directions = [
-    [0, 1],   // →
-    [1, 0],   // ↓
-    [1, 1],   // ↘
-    [1, -1]   // ↙
+    [0, 1],  
+    [1, 0],   
+    [1, 1],   
+    [1, -1]   
   ];
 
   for (let r = 0; r < ROWS; r++) {
