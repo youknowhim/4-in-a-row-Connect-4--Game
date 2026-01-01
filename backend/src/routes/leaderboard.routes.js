@@ -5,7 +5,7 @@ const db = require("../config/db");
 
 //   LEADERBOARD
  
-router.get("/", async (req, res) => {
+router.get("/leaderboard", async (req, res) => {
   try {
     const [rows] = await db.query(
       `

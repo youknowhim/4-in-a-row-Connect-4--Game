@@ -6,7 +6,7 @@ const db = require("../config/db");
 //   USER STATS
 
 // CREATE USER 
- router.post("/user", async (req, res) => {
+ router.post("/", async (req, res) => {
   const { username } = req.body;
 
   if (!username) {
