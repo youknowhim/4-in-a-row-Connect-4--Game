@@ -5,10 +5,8 @@ const db = require("../config/db");
 
 //   USER STATS
 
-/**
- * CREATE USER (for testing / first-time users)
- */
-router.post("/", async (req, res) => {
+// CREATE USER 
+ router.post("/user", async (req, res) => {
   const { username } = req.body;
 
   if (!username) {
