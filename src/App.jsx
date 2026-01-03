@@ -4,26 +4,20 @@ import { connectSocket, sendMessage } from "./socket";
 import UsernamePage from "./components/UsernamePage";
 
 export default function App() {
-  /* ---------------- IDENTITY ---------------- */
   const myPlayerId = localStorage.getItem("playerId");
 
   const [username, setUsername] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [loading, setLoading] = useState(false);
-
-  /* ---------------- GAME STATE ---------------- */
   const [board, setBoard] = useState([]);
   const [status, setStatus] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [gameActive, setGameActive] = useState(false);
-
-
-  /* ---------------- LEADERBOARD ---------------- */
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [leaderboard, setLeaderboard] = useState([]);
 
-  /* ---------------- TURN TEXT HELPER ---------------- */
+  
  function getTurnText(currentTurn) {
   const storedId = localStorage.getItem("playerId");
 
@@ -36,8 +30,6 @@ export default function App() {
   return "Opponent's turn";
 }
 
-
-  /* ---------------- AUTO REJOIN ---------------- */
   useEffect(() => {
     const gameFinished = localStorage.getItem("gameFinished");
 
@@ -65,7 +57,6 @@ export default function App() {
     }
   }, []);
 
-  /* ---------------- JOIN ---------------- */
   async function handleJoin(name) {
     if (!name) return alert("Username is required");
 
@@ -89,7 +80,7 @@ export default function App() {
     setLoading(false);
   }
 
-  /* ---------------- GAME FLOW ---------------- */
+
   function startMatch() {
     localStorage.removeItem("gameFinished");
     setIsSearching(true);
@@ -109,7 +100,6 @@ export default function App() {
     sendMessage({ type: "MOVE", column });
   }
 
-  /* ---------------- SOCKET HANDLER ---------------- */
   function handleSocketMessage(data) {
 
     if (data.type === "OPPONENT_LEFT") {
