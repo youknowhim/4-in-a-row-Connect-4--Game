@@ -111,19 +111,16 @@ export default function App() {
 
     if (data.type === "REJOIN_FAILED") {
       localStorage.clear();
-      window.location.reload();
       return;
     }
 
     if (data.type === "JOINED") {
       setIsLoggedIn(true);
-      setCheckingSession(false);
       return;
     }
 
     if (data.type === "MATCHMAKING") {
       setIsLoggedIn(true);
-      setStatus("Searching for opponent...");
       return;
     }
 
@@ -135,12 +132,17 @@ export default function App() {
       return;
     }
 
-    if (data.type === "GAME_RESUME") {
-      setGameActive(true);
-      setBoard(data.board);
-      setStatus(getTurnText(data.currentTurn));
-      return;
-    }
+      if (data.type === "GAME_RESUME") {
+    setIsLoggedIn(true);
+    setGameActive(true);
+    setBoard(data.board);
+    setStatus(
+      data.currentTurn === myPlayerId
+        ? "Your turn"
+        : "Opponent's turn"
+    );
+    return;
+  }
 
     if (data.type === "GAME_UPDATE") {
       setBoard(data.board);
