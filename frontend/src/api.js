@@ -1,5 +1,5 @@
 
-const API_BASE = import.meta.env.BACKEND_URL || "http://localhost:1025";
+const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:1025";
 
 export async function createUser(username) {
   const res = await fetch(`${API_BASE}/user`, {
