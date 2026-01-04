@@ -6,20 +6,23 @@ const db = require("../config/db");
 
 router.get("/leaderboard", async (req, res) => {
   try {
-    const [rows] = await db.query(
-      `
+    const [rows] = await db.query(`
       SELECT p.username, l.wins
-      FROM leaderboard l, players p
-      WHERE l.player_id = p.id
+      FROM leaderboard l
+      JOIN players p ON l.player_id = p.id
       ORDER BY l.wins DESC
       LIMIT 10
-      `
-    );
+    `);
 
-    res.json(rows);
+    res.json(rows); // MUST be an array
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch leaderboard" });
+    console.error("LEADERBOARD DB ERROR:", err);
+    res.status(500).json({
+      error: "Failed to fetch leaderboard",
+      details: err.message
+    });
   }
 });
+
 
 module.exports = router;
