@@ -3,15 +3,15 @@ const router = express.Router();
 const db = require("../config/db");
 
 
-//   LEADERBOARD
- 
+
 router.get("/leaderboard", async (req, res) => {
   try {
     const [rows] = await db.query(
       `
-      SELECT username, games_won
-      FROM users
-      ORDER BY games_won DESC
+      SELECT p.username, l.wins
+      FROM leaderboard l, players p
+      WHERE l.player_id = p.id
+      ORDER BY l.wins DESC
       LIMIT 10
       `
     );

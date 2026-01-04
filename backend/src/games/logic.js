@@ -1,75 +1,40 @@
-/*
- * Try to place a disc in the given column.
- * This function ONLY updates board state.
- */
+const { ROWS, COLS } = require("./config");
 function makeMove(board, column, player) {
-  // Invalid column
-  if (column < 0 || column > 6) {
-    return { error: "Invalid column" };
-  }
-
-  // Find the lowest empty cell
-  for (let row = 5; row >= 0; row--) {
-    if (board[row][column] === null) {
-      board[row][column] = player;
-      return { row, column };
+  for (let r = ROWS - 1; r >= 0; r--) {
+    if (board[r][column] === 0) {
+      board[r][column] = player;
+      return true;
     }
   }
-
-  return { error: "Column full" };
+  return false;
 }
 
-/*
- * Check if the given player has won the game.
- */
+function checkDraw(board) {
+  return board[0].every(c => c !== 0);
+}
+
 function checkWin(board, player) {
-  const ROWS = 6;
-  const COLS = 7;
-
-  // 4 directions: horizontal, vertical, 2 diagonals
-  const directions = [
-    [0, 1],  
-    [1, 0],   
-    [1, 1],   
-    [1, -1]   
-  ];
-
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       if (board[r][c] !== player) continue;
-
-      for (let [dr, dc] of directions) {
+      for (const [dr, dc] of dirs) {
         let count = 0;
-
         for (let i = 0; i < 4; i++) {
-          const nr = r + dr * i;
-          const nc = c + dc * i;
-
+          const nr = r + dr*i, nc = c + dc*i;
           if (
-            nr >= 0 && nr < ROWS &&
-            nc >= 0 && nc < COLS &&
-            board[nr][nc] === player
-          ) {
-            count++;
-          }
+            nr < 0 || nr >= ROWS ||
+            nc < 0 || nc >= COLS ||
+            board[nr][nc] !== player
+          ) break;
+          count++;
         }
-
         if (count === 4) return true;
       }
     }
   }
-
   return false;
 }
-
-/**
- * Check if the game is a draw.
- * If top row has no empty cells, board is full.
- */
-function checkDraw(board) {
-  return board[0].every(cell => cell !== null);
-}
-
 module.exports = {
   makeMove,
   checkWin,

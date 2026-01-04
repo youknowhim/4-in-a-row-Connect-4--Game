@@ -1,58 +1,29 @@
-const { makeMove, checkWin } = require("./logic.js");
+const { makeMove, checkWin, checkDraw } = require("./logic");
+const { ROWS, COLS } = require("./config");
+const { cloneBoard } = require("./gameUtils");
+function botChooseColumn(game) {
+  const board = game.board;
+  const human = game.player1Id;
 
-/**
- * Decide bot move based on priority.
- * Returns column index (0–6)
- */
-function getBotMove(board, botPlayer, humanPlayer) {
-  // Try to win
-  const winMove = findWinningMove(board, botPlayer);
-  if (winMove !== null) return winMove;
-
-  // Try to block opponent
-  const blockMove = findWinningMove(board, humanPlayer);
-  if (blockMove !== null) return blockMove;
-
-  // Prefer center column
-  if (isColumnPlayable(board, 3)) return 3;
-
-  // Fallback: first available column
-  for (let col = 0; col < 7; col++) {
-    if (isColumnPlayable(board, col)) {
-      return col;
-    }
+  for (let c = 0; c < COLS; c++) {
+    const copy = cloneBoard(board);
+    if (makeMove(copy, c, "BOT") && checkWin(copy, "BOT")) return c;
   }
 
-  return null; // no move possible
-}
+  for (let c = 0; c < COLS; c++) {
+    const copy = cloneBoard(board);
+    if (makeMove(copy, c, human) && checkWin(copy, human)) return c;
+  }
 
-/**
- * Check if a player can win by playing one move.
- */
-function findWinningMove(board, player) {
-  for (let col = 0; col < 7; col++) {
-    if (!isColumnPlayable(board, col)) continue;
+  const center = Math.floor(COLS / 2);
+  if (makeMove(cloneBoard(board), center, "BOT")) return center;
 
-    // Clone board (simple deep copy)
-    const tempBoard = board.map(row => [...row]);
-
-    makeMove(tempBoard, col, player);
-
-    if (checkWin(tempBoard, player)) {
-      return col;
-    }
+  for (let c = 0; c < COLS; c++) {
+    if (makeMove(cloneBoard(board), c, "BOT")) return c;
   }
 
   return null;
 }
-
-/**
- * Check if a column can accept a disc.
- */
-function isColumnPlayable(board, column) {
-  return board[0][column] === null;
-}
-
 module.exports = {
-  getBotMove
+  botChooseColumn
 };

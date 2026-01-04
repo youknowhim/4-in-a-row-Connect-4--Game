@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 
 
-// User creation, stats & analytics (main dashboard)
+// User creation
 app.use("/user", require("./routes/user.routes"));
 
 // Global leaderboard

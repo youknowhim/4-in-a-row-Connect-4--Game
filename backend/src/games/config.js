@@ -1,0 +1,10 @@
+const ROWS = 6;
+const COLS = 7;
+const BOT_FALLBACK_TIME = 10000;
+const RECONNECT_WINDOW = 30000;
+module.exports = {
+  ROWS,
+  COLS,
+  BOT_FALLBACK_TIME,
+  RECONNECT_WINDOW
+};

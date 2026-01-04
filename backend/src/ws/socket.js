@@ -1,174 +1,244 @@
 const WebSocket = require("ws");
-const { addToQueue } = require("../game/matchmaking");
-const { activeGames } = require("../game/gameManager");
-const { makeMove, checkWin, checkDraw } = require("../game/logic");
+const { saveGame, updateLeaderboard } = require("../config/dbHelpers");
+const { publishGameFinished } = require("../kafka/producer");
+const {botChooseColumn} = require("../games/bot");
+const {forceLeaveCurrentGame} = require("../games/forceleave");
+const {makeMove, checkWin, checkDraw} = require("../games/logic");
+const {tryMatchmaking, startBotFallback} = require("../games/matchmaking");
+const {generateId, createEmptyBoard, findGameByPlayer, removeFromQueue} = require("../games/gameUtils");
+const {ROWS, COLS,RECONNECT_WINDOW} = require("../games/config");
+const {clients, waitingQueue, activeGames,disconnectTimers} = require("../games/state");
 
-// Track connected users
-// username -> websocket
-const clients = new Map();
-
-// Track disconnect timers for reconnection
-// username -> timeoutId
-const disconnectTimers = new Map();
-
+// SOCKET SERVER
 function setupWebSocket(server) {
   const wss = new WebSocket.Server({ server });
 
   wss.on("connection", (ws) => {
-    let username = null;
-    let gameId = null;
 
-    ws.on("message", (message) => {
+    ws.on("message", async (raw) => {
       let data;
-      try {
-        data = JSON.parse(message);
-      } catch {
+      try { data = JSON.parse(raw); } catch { return; }
+
+      /* JOIN / REJOIN */
+      if (data.type === "JOIN" || data.type === "REJOIN") {
+        ws.playerId = data.playerId;
+        if (!ws.playerId) return;
+
+        clients.set(ws.playerId, ws);
+
+        if (disconnectTimers.has(ws.playerId)) {
+          clearTimeout(disconnectTimers.get(ws.playerId));
+          disconnectTimers.delete(ws.playerId);
+        }
+
+        const game = findGameByPlayer(ws.playerId);
+
+        if (data.type === "REJOIN" && game) {
+          ws.send(JSON.stringify({
+            type: "GAME_RESUME",
+            board: game.board,
+            currentTurn: game.currentTurn,
+            isBotGame: game.isBotGame
+          }));
+        } else {
+          ws.send(JSON.stringify({ type: "JOINED" }));
+        }
         return;
       }
 
-      /* -------------------- JOIN -------------------- */
-      if (data.type === "JOIN") {
-        username = data.username;
-        clients.set(username, ws);
-
-        // If user reconnects within 30s, cancel forfeit timer
-        if (disconnectTimers.has(username)) {
-          clearTimeout(disconnectTimers.get(username));
-          disconnectTimers.delete(username);
-        }
-
-        ws.send(JSON.stringify({
-          type: "JOINED",
-          message: "Connected successfully"
-        }));
-      }
-
-      /* -------------------- START MATCH -------------------- */
+      /* START MATCH */
       if (data.type === "START_MATCH") {
-        addToQueue(username, (game) => {
-          if (!game) {
-            ws.send(JSON.stringify({
-              type: "WAITING",
-              message: "Waiting for opponent"
-            }));
-            return;
-          }
-
-          gameId = game.gameId;
-
-          const payload = JSON.stringify({
-            type: "GAME_START",
-            gameId: game.gameId,
-            player1: game.player1,
-            player2: game.player2,
-            currentTurn: game.currentTurn,
-            board: game.board
-          });
-
-          clients.get(game.player1)?.send(payload);
-          clients.get(game.player2)?.send(payload);
-        });
+        forceLeaveCurrentGame(ws.playerId);
+        tryMatchmaking(ws.playerId);
+        return;
       }
 
-      /* -------------------- MOVE -------------------- */
+      /* MOVE */
       if (data.type === "MOVE") {
-        const game = activeGames.get(gameId);
-        if (!game) return;
+  const game = findGameByPlayer(ws.playerId);
+  if (!game || game.currentTurn !== ws.playerId) return;
 
-        // Turn validation (server decides)
-        if (game.currentTurn !== username) {
-          ws.send(JSON.stringify({
-            type: "ERROR",
-            message: "Not your turn"
-          }));
-          return;
+  /*PLAYER MOVE (DELAYED)*/
+  setTimeout(async () => {
+    const moved = makeMove(game.board, data.column, ws.playerId);
+    if (!moved) return;
+
+    // PLAYER WIN
+    if (checkWin(game.board, ws.playerId)) {
+      const end = {
+        type: "GAME_END",
+        winner: ws.playerId,
+        board: game.board
+      };
+
+      clients.get(game.player1Id)?.send(JSON.stringify(end));
+      clients.get(game.player2Id)?.send(JSON.stringify(end));
+
+      await publishGameFinished({
+  event: "GAME_FINISHED",
+  gameId: game.gameId,
+  player1Id: game.player1Id,
+  player2Id: game.isBotGame ? null : game.player2Id,
+  winnerId: ws.playerId,
+  isBotGame: game.isBotGame,
+  result: "WIN",
+  startedAt: game.startedAt,
+  endedAt: Date.now()
+});
+ 
+
+
+      activeGames.delete(game.gameId);
+      return;
+    }
+
+    // DRAW
+    if (checkDraw(game.board)) {
+      const end = { type: "GAME_END", board: game.board };
+
+      clients.get(game.player1Id)?.send(JSON.stringify(end));
+      clients.get(game.player2Id)?.send(JSON.stringify(end));
+
+      await publishGameFinished({
+  event: "GAME_FINISHED",
+  gameId: game.gameId,
+  player1Id: game.player1Id,
+  player2Id: game.isBotGame ? null : game.player2Id,
+  winnerId: null,
+  isBotGame: game.isBotGame,
+  result: "DRAW",
+  startedAt: game.startedAt,
+  endedAt: Date.now()
+});
+
+      activeGames.delete(game.gameId);
+      return;
+    }
+
+    /*BOT GAME*/
+    if (game.isBotGame) {
+      game.currentTurn = "BOT";
+
+      // send board AFTER player move
+      clients.get(game.player1Id)?.send(JSON.stringify({
+        type: "GAME_UPDATE",
+        board: game.board,
+        currentTurn: "BOT"
+      }));
+
+      /* BOT MOVE (AFTER 1s) */
+      setTimeout(async () => {
+        const col = botChooseColumn(game);
+        if (col !== null) {
+          makeMove(game.board, col, "BOT");
         }
 
-        // Apply move using pure logic
-        const result = makeMove(game.board, data.column, username);
-
-        if (result.error) {
-          ws.send(JSON.stringify({
-            type: "ERROR",
-            message: result.error
-          }));
-          return;
-        }
-
-        // Win check
-        if (checkWin(game.board, username)) {
-          const endPayload = JSON.stringify({
+        // BOT WIN
+        if (checkWin(game.board, "BOT")) {
+          clients.get(game.player1Id)?.send(JSON.stringify({
             type: "GAME_END",
-            winner: username,
-            result: "WIN",
+            winner: "BOT",
             board: game.board
-          });
+          }));
 
-          clients.get(game.player1)?.send(endPayload);
-          clients.get(game.player2)?.send(endPayload);
+          await publishGameFinished({
+  event: "GAME_FINISHED",
+  gameId: game.gameId,
+  player1Id: game.player1Id,
+  player2Id: null,
+  winnerId: "BOT",
+  isBotGame: true,
+  result: "WIN",
+  startedAt: game.startedAt,
+  endedAt: Date.now()
+});
 
-          activeGames.delete(gameId);
+          activeGames.delete(game.gameId);
           return;
         }
 
-        // Draw check
+        // BOT DRAW
         if (checkDraw(game.board)) {
-          const drawPayload = JSON.stringify({
+          clients.get(game.player1Id)?.send(JSON.stringify({
             type: "GAME_END",
-            result: "DRAW",
             board: game.board
-          });
+          }));
 
-          clients.get(game.player1)?.send(drawPayload);
-          clients.get(game.player2)?.send(drawPayload);
-
-          activeGames.delete(gameId);
+          await saveGame(game, "DRAW", null);
+          activeGames.delete(game.gameId);
           return;
         }
 
-        // Switch turn
-        game.currentTurn =
-          username === game.player1 ? game.player2 : game.player1;
+        // back to PLAYER
+        game.currentTurn = game.player1Id;
 
-        // Broadcast updated state
-        const updatePayload = JSON.stringify({
+        clients.get(game.player1Id)?.send(JSON.stringify({
           type: "GAME_UPDATE",
           board: game.board,
           currentTurn: game.currentTurn
-        });
+        }));
 
-        clients.get(game.player1)?.send(updatePayload);
-        clients.get(game.player2)?.send(updatePayload);
-      }
+      }, 1000); // ⏱ BOT MOVE DELAY
+
+      return;
+    }
+
+    /* PvP (UNCHANGED) */
+    game.currentTurn =
+      ws.playerId === game.player1Id ? game.player2Id : game.player1Id;
+
+    const update = {
+      type: "GAME_UPDATE",
+      board: game.board,
+      currentTurn: game.currentTurn
+    };
+
+    clients.get(game.player1Id)?.send(JSON.stringify(update));
+    clients.get(game.player2Id)?.send(JSON.stringify(update));
+
+  }, 1000); // ⏱ PLAYER MOVE DELAY
+}
+
     });
 
-    /* -------------------- DISCONNECT -------------------- */
     ws.on("close", () => {
-      if (!username || !gameId) return;
+      if (!ws.playerId) return;
+      removeFromQueue(ws.playerId);
 
-      // Start 30-second grace period
-      const timer = setTimeout(() => {
-        const game = activeGames.get(gameId);
+      const timer = setTimeout(async () => {
+        const game = findGameByPlayer(ws.playerId);
         if (!game) return;
 
+        if (game.isBotGame) {
+          await saveGame(game, "WIN", "BOT");
+          activeGames.delete(game.gameId);
+          return;
+        }
+
         const winner =
-          username === game.player1 ? game.player2 : game.player1;
+          game.player1Id === ws.playerId ? game.player2Id : game.player1Id;
 
-        const payload = JSON.stringify({
+        clients.get(winner)?.send(JSON.stringify({
           type: "GAME_END",
-          result: "FORFEIT",
-          winner
-        });
+          winner,
+          result: "FORFEIT"
+        }));
 
-        clients.get(winner)?.send(payload);
+        await saveGame(game, "FORFEIT", winner);
+        await updateLeaderboard(winner);
 
-        activeGames.delete(gameId);
-        disconnectTimers.delete(username);
-      }, 30000);
+        activeGames.delete(game.gameId);
+      }, RECONNECT_WINDOW);
 
-      disconnectTimers.set(username, timer);
+      disconnectTimers.set(ws.playerId, timer);
     });
   });
 }
 
-module.exports = setupWebSocket;
+module.exports = {
+  setupWebSocket,
+  clients,
+  waitingQueue,
+  activeGames
+};
+

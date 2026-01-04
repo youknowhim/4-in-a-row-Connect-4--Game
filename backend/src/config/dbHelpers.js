@@ -1,53 +1,53 @@
 const db = require("./db");
 
-async function saveGame(game, result, winner = null) {
+
+  // Save completed game
+ 
+async function saveGame(game, result, winnerId = null) {
   const durationSeconds = Math.floor(
     (Date.now() - game.startedAt) / 1000
   );
 
+  // Normalize BOT values to NULL
+  const player1Id = game.player1Id || null;
+  const player2Id = game.isBotGame ? null : game.player2Id;
+  const normalizedWinnerId =
+    winnerId === "BOT" ? null : winnerId;
+
   await db.query(
     `
     INSERT INTO games
-    (id, player1, player2, winner, is_bot_game, duration_seconds, result)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+      (id, player1_id, player2_id, winner_id, is_bot_game, duration_seconds, result)
+    VALUES
+      (?, ?, ?, ?, ?, ?, ?)
     `,
     [
       game.gameId,
-      game.player1,
-      game.player2,
-      winner,
-      game.isBotGame || false,
+      player1Id,
+      player2Id,
+      normalizedWinnerId,
+      game.isBotGame ? 1 : 0,
       durationSeconds,
       result
     ]
   );
 }
 
-async function updateUserStats(player1, player2, winner = null) {
-  // Increment games played for both users
+// Update leaderboard (wins only for HUMAN players)
+async function updateLeaderboard(winnerId) {
+  if (!winnerId || winnerId === "BOT") return;
+
   await db.query(
     `
-    UPDATE users
-    SET games_played = games_played + 1
-    WHERE username IN (?, ?)
+    INSERT INTO leaderboard (player_id, wins)
+    VALUES (?, 1)
+    ON DUPLICATE KEY UPDATE wins = wins + 1
     `,
-    [player1, player2]
+    [winnerId]
   );
-
-  // Increment games won for the winner (if any)
-  if (winner) {
-    await db.query(
-      `
-      UPDATE users
-      SET games_won = games_won + 1
-      WHERE username = ?
-      `,
-      [winner]
-    );
-  }
 }
 
 module.exports = {
   saveGame,
-  updateUserStats
+  updateLeaderboard
 };
