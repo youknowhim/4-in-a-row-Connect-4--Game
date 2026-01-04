@@ -4,7 +4,7 @@ let reconnectTimer = null;
 let reconnectStartTime = null;
 let shouldReconnect = false;
 
-const WS_URL = import.meta.env.BACKEND_SOCKET_URL || "ws://localhost:1025/ws";
+const WS_URL = import.meta.env.VITE_BACKEND_SOCKET_URL || "ws://localhost:1025/ws";
 const RECONNECT_WINDOW = 30000; // 30 seconds
 
 export function connectSocket(onMessage, onOpen) {
