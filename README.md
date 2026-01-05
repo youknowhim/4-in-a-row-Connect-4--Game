@@ -5,8 +5,8 @@ Supports PvP, Bot games, Reconnect handling, and Leaderboard tracking.
 
 LINK - https://4-in-a-row-connect-4-game.vercel.app/
 
-TechStacks-Frontend
-ReactJS,TailwindCSS
+TechStacks-Frontend<br/>
+ReactJS<br/>,TailwindCSS<br/>
 
 Backend-<br/>
 NodeJS<br/>
