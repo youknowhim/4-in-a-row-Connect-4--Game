@@ -16,7 +16,7 @@ async function saveGame(game, result, winnerId = null) {
 
   await db.query(
     `
-    INSERT INTO games
+    INSERT IGNORE INTO games
       (id, player1_id, player2_id, winner_id, is_bot_game, duration_seconds, result)
     VALUES
       (?, ?, ?, ?, ?, ?, ?)
