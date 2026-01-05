@@ -4,14 +4,15 @@ require("dotenv").config();
 const http = require("http");
 const app = require("./app");
 const {setupWebSocket} = require("./ws/socket");
-const { initProducer } = require("./kafka/producer");
-const { startConsumer } = require("./kafka/consumer");
+if (process.env.USE_KAFKA === "true") {
+  const { initProducer } = require("./kafka/producer");
+  const { startConsumer } = require("./kafka/consumer");
 
-// // initiating Kafka producer and consumer
-(async () => {
-  await initProducer();
-  await startConsumer();
-})();
+  (async () => {
+    await initProducer();
+    await startConsumer();
+  })();
+}
 
 
 // Create HTTP server from Express app
