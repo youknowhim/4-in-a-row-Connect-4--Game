@@ -1,6 +1,5 @@
 const WebSocket = require("ws");
-const { saveGame, updateLeaderboard } = require("../config/dbHelpers");
-const { publishGameFinished } = require("../kafka/producer");
+const { finalizeGame } = require("../gameFinalizer");
 const {botChooseColumn} = require("../games/bot");
 const {forceLeaveCurrentGame} = require("../games/forceleave");
 const {makeMove, checkWin, checkDraw} = require("../games/logic");
@@ -74,7 +73,7 @@ function setupWebSocket(server) {
       clients.get(game.player1Id)?.send(JSON.stringify(end));
       clients.get(game.player2Id)?.send(JSON.stringify(end));
 
-      await publishGameFinished({
+      await finalizeGame({
   event: "GAME_FINISHED",
   gameId: game.gameId,
   player1Id: game.player1Id,
@@ -99,7 +98,7 @@ function setupWebSocket(server) {
       clients.get(game.player1Id)?.send(JSON.stringify(end));
       clients.get(game.player2Id)?.send(JSON.stringify(end));
 
-      await publishGameFinished({
+      await finalizeGame({
   event: "GAME_FINISHED",
   gameId: game.gameId,
   player1Id: game.player1Id,
@@ -141,7 +140,7 @@ function setupWebSocket(server) {
             board: game.board
           }));
 
-          await publishGameFinished({
+          await finalizeGame({
   event: "GAME_FINISHED",
   gameId: game.gameId,
   player1Id: game.player1Id,
