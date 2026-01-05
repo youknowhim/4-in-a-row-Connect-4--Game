@@ -1,17 +1,17 @@
 const { saveGame, updateLeaderboard } = require("./config/dbHelpers");
+const { publishGameFinished } = require("./kafka/producer");
 
-let publishGameFinished;
-
-if (process.env.USE_KAFKA === "true") {
-  ({ publishGameFinished } = require("../kafka/producer"));
-}
+const USE_KAFKA = process.env.USE_KAFKA === "true";
 
 async function finalizeGame(event) {
-  if (process.env.USE_KAFKA === "true") {
-    // async event-driven
-    await publishGameFinished(event);
+  if (USE_KAFKA) {
+    // LOCAL / EVENT-DRIVEN
+    await publishGameFinished({
+      event: "GAME_FINISHED",
+      ...event,
+    });
   } else {
-    // synchronous direct DB write
+    // PRODUCTION / DIRECT DB
     await saveGame(
       {
         gameId: event.gameId,
