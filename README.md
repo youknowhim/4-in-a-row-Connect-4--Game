@@ -91,10 +91,10 @@ KAFKA_BROKER=localhost:9092
 
 ℹ️ SSL is automatically disabled for localhost Kafka.
 
-Run Backend
-cd backend
-npm install
-npm run dev
+Run Backend<br/>
+cd backend<br/>
+npm install<br/>
+npm run dev<br/>
 
 🌍 Production ENV
 Environment Variables (Render Dashboard)
