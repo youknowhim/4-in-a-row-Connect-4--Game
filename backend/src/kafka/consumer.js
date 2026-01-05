@@ -1,5 +1,4 @@
-const fs = require("fs");
-const path = require("path");
+
 const { Kafka } = require("kafkajs");
 const { saveGame, updateLeaderboard } = require("../config/dbHelpers");
 
@@ -12,12 +11,13 @@ const kafka = new Kafka({
   brokers: process.env.KAFKA_BROKER.split(","),
 
   // AIVEN mTLS CONFIG
-  ssl: {
-    rejectUnauthorized: true,
-    ca: [process.env.KAFKA_CA_CERT],
-    cert: process.env.KAFKA_ACCESS_CERT,
-    key: process.env.KAFKA_ACCESS_KEY,
-  },
+ssl: {
+  rejectUnauthorized: true,
+  ca: process.env.KAFKA_CA_CERT.split("\\n"),
+  cert: process.env.KAFKA_ACCESS_CERT.replace(/\\n/g, "\n"),
+  key: process.env.KAFKA_ACCESS_KEY.replace(/\\n/g, "\n"),
+}
+
 });
 
 const consumer = kafka.consumer({ groupId: "game-group-v2" });
