@@ -74,7 +74,6 @@ function setupWebSocket(server) {
       clients.get(game.player2Id)?.send(JSON.stringify(end));
 
       await finalizeGame({
-  event: "GAME_FINISHED",
   gameId: game.gameId,
   player1Id: game.player1Id,
   player2Id: game.isBotGame ? null : game.player2Id,
@@ -82,7 +81,6 @@ function setupWebSocket(server) {
   isBotGame: game.isBotGame,
   result: "WIN",
   startedAt: game.startedAt,
-  endedAt: Date.now()
 });
  
 
@@ -99,7 +97,6 @@ function setupWebSocket(server) {
       clients.get(game.player2Id)?.send(JSON.stringify(end));
 
       await finalizeGame({
-  event: "GAME_FINISHED",
   gameId: game.gameId,
   player1Id: game.player1Id,
   player2Id: game.isBotGame ? null : game.player2Id,
@@ -107,7 +104,6 @@ function setupWebSocket(server) {
   isBotGame: game.isBotGame,
   result: "DRAW",
   startedAt: game.startedAt,
-  endedAt: Date.now()
 });
 
       activeGames.delete(game.gameId);
@@ -141,7 +137,6 @@ function setupWebSocket(server) {
           }));
 
           await finalizeGame({
-  event: "GAME_FINISHED",
   gameId: game.gameId,
   player1Id: game.player1Id,
   player2Id: null,
@@ -149,7 +144,6 @@ function setupWebSocket(server) {
   isBotGame: true,
   result: "WIN",
   startedAt: game.startedAt,
-  endedAt: Date.now()
 });
 
           activeGames.delete(game.gameId);
@@ -163,7 +157,15 @@ function setupWebSocket(server) {
             board: game.board
           }));
 
-          await saveGame(game, "DRAW", null);
+            await finalizeGame({
+    gameId: game.gameId,
+    player1Id: game.player1Id,
+    player2Id: null,
+    winnerId: null,
+    isBotGame: true,
+    result: "DRAW",
+    startedAt: game.startedAt,
+  });
           activeGames.delete(game.gameId);
           return;
         }
@@ -209,7 +211,15 @@ function setupWebSocket(server) {
         if (!game) return;
 
         if (game.isBotGame) {
-          await saveGame(game, "WIN", "BOT");
+            await finalizeGame({
+    gameId: game.gameId,
+    player1Id: game.player1Id,
+    player2Id: null,
+    winnerId: "BOT",
+    isBotGame: true,
+    result: "WIN",
+    startedAt: game.startedAt,
+  });
           activeGames.delete(game.gameId);
           return;
         }
@@ -223,8 +233,15 @@ function setupWebSocket(server) {
           result: "FORFEIT"
         }));
 
-        await saveGame(game, "FORFEIT", winner);
-        await updateLeaderboard(winner);
+        await finalizeGame({
+  gameId: game.gameId,
+  player1Id: game.player1Id,
+  player2Id: game.player2Id,
+  winnerId: winner,
+  isBotGame: false,
+  result: "FORFEIT",
+  startedAt: game.startedAt,
+});
 
         activeGames.delete(game.gameId);
       }, RECONNECT_WINDOW);
