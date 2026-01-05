@@ -13,18 +13,9 @@ const kafka = new Kafka({
   //AIVEN mTLS CONFIG
   ssl: {
     rejectUnauthorized: true,
-    key: fs.readFileSync(
-      path.join(__dirname, "../../", process.env.KAFKA_SSL_KEY),
-      "utf-8"
-    ),
-    cert: fs.readFileSync(
-      path.join(__dirname, "../../", process.env.KAFKA_SSL_CERT),
-      "utf-8"
-    ),
-    ca: fs.readFileSync(
-      path.join(__dirname, "../../", process.env.KAFKA_SSL_CA),
-      "utf-8"
-    ),
+    ca: [process.env.KAFKA_CA_CERT],
+    cert: process.env.KAFKA_ACCESS_CERT,
+    key: process.env.KAFKA_ACCESS_KEY,
   },
 });
 
